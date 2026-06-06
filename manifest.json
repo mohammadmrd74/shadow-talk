@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Shadow Talk",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Turn any YouTube video into a speaking practice tool. Shadow native speakers sentence by sentence.",
   "permissions": ["activeTab", "scripting"],
   "host_permissions": ["*://*.youtube.com/*"],
