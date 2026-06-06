@@ -147,54 +147,74 @@ const ShadowTranscript = (() => {
       .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)));
   }
 
-  /** Merge segments into sentences */
+  /**
+   * Merge raw caption segments into sentences.
+   *
+   * Captions rarely line up with sentences — a single segment can hold the end
+   * of one sentence and the start of the next ("...stand mixer. Then,"). So we
+   * flatten everything into timed words (each word gets a timestamp
+   * interpolated across its segment's span) and then break on sentence-ending
+   * punctuation wherever it occurs — mid-segment included.
+   */
   function mergeIntoSentences(segments) {
     if (segments.length === 0) return [];
 
-    const sentences = [];
-    let currentText = '';
-    let currentStart = segments[0].start;
-
-    const sentenceEnders = /[.!?]$/;
-    const GAP_THRESHOLD = 0.8;
-    const hasPunctuation = segments.some((s) => sentenceEnders.test(s.text.trim()));
-
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
-      const segEnd = seg.start + seg.duration;
-      const trimmedText = seg.text.trim();
-
-      if (currentText) {
-        currentText += ' ' + trimmedText;
-      } else {
-        currentText = trimmedText;
-        currentStart = seg.start;
+    // 1) Flatten segments into a stream of timed words.
+    const words = [];
+    for (const seg of segments) {
+      const segWords = seg.text.trim().split(/\s+/).filter(Boolean);
+      if (segWords.length === 0) continue;
+      const span = Math.max(0, seg.duration || 0);
+      for (let j = 0; j < segWords.length; j++) {
+        // Spread words evenly across the segment's time span.
+        const t = seg.start + (span * j) / segWords.length;
+        words.push({ word: segWords[j], time: t });
       }
+    }
+    if (words.length === 0) return [];
+
+    const sentenceEnder = /[.!?]["')\]]?$/;
+    const GAP_THRESHOLD = 0.8;
+    const MAX_WORDS = 15;      // chunk size for unpunctuated transcripts
+    const HARD_CAP = 40;       // safety cap so a missed period can't run away
+
+    // Decide whether this transcript is genuinely punctuated by RATIO, not by
+    // "any". Auto-generated transcripts have ~0% sentence-enders; a stray period
+    // (e.g. "24.7", "645.") must not flip the whole thing into punctuation mode.
+    const enderCount = words.filter((w) => sentenceEnder.test(w.word)).length;
+    const hasPunctuation = enderCount >= words.length / 30;
+
+    // 2) Walk the words, flushing a sentence at each boundary.
+    const sentences = [];
+    let buf = [];
+    let bufStart = words[0].time;
+
+    const flush = (endTime) => {
+      if (buf.length === 0) return;
+      const text = buf.map((w) => w.word).join(' ').trim();
+      if (text) sentences.push({ text, startTime: bufStart, endTime });
+      buf = [];
+    };
+
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      if (buf.length === 0) bufStart = w.time;
+      buf.push(w);
+
+      const next = words[i + 1];
+      // A sentence ends right where the next one begins (or +2s for the last).
+      const endTime = next ? next.time : w.time + 2;
 
       let shouldBreak = false;
-
       if (hasPunctuation) {
-        shouldBreak = sentenceEnders.test(trimmedText);
+        shouldBreak = sentenceEnder.test(w.word) || buf.length >= HARD_CAP;
       } else {
-        const nextSeg = segments[i + 1];
-        if (nextSeg) {
-          const gap = nextSeg.start - segEnd;
-          shouldBreak = gap >= GAP_THRESHOLD;
-        }
-        if (currentText.split(/\s+/).length >= 15) shouldBreak = true;
+        if (next && next.time - w.time >= GAP_THRESHOLD) shouldBreak = true;
+        if (buf.length >= MAX_WORDS) shouldBreak = true;
       }
+      if (i === words.length - 1) shouldBreak = true;
 
-      if (i === segments.length - 1) shouldBreak = true;
-
-      if (shouldBreak && currentText.trim()) {
-        sentences.push({
-          text: currentText.trim(),
-          startTime: currentStart,
-          endTime: segEnd,
-        });
-        currentText = '';
-        currentStart = segments[i + 1]?.start || segEnd;
-      }
+      if (shouldBreak) flush(endTime);
     }
 
     return sentences;

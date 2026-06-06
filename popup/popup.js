@@ -25,17 +25,75 @@ chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
   `;
 
   document.getElementById('toggle-btn').addEventListener('click', () => {
-    chrome.tabs.sendMessage(tab.id, { action: 'toggle' }, (response) => {
-      if (chrome.runtime.lastError) {
-        content.innerHTML = `
-          <div class="not-youtube">
-            Could not connect. Try refreshing the YouTube page.
-          </div>
-        `;
-        return;
-      }
-      // Close popup after toggling
-      window.close();
-    });
+    toggleWithInjection(tab.id);
   });
 });
+
+/**
+ * Content script files in the order they must be injected.
+ * The page-bridge runs in the MAIN world; the rest run in the default
+ * (ISOLATED) world. `content.js` must come last — it depends on the others.
+ */
+const ISOLATED_SCRIPTS = [
+  'content/transcript.js',
+  'content/player.js',
+  'content/speech.js',
+  'content/scoring.js',
+  'content/ui.js',
+  'content/content.js',
+];
+const MAIN_SCRIPTS = ['content/page-bridge.js'];
+const STYLES = ['styles/overlay.css'];
+
+/**
+ * Send the toggle message. If the content script isn't present (e.g. the
+ * page reached /watch via YouTube's SPA router with no document load, or
+ * scripts haven't finished loading), inject it on demand and retry once.
+ */
+function toggleWithInjection(tabId) {
+  chrome.tabs.sendMessage(tabId, { action: 'toggle' }, () => {
+    if (!chrome.runtime.lastError) {
+      window.close();
+      return;
+    }
+
+    // No listener in the tab — inject the content scripts, then retry.
+    injectContentScripts(tabId)
+      .then(() => {
+        chrome.tabs.sendMessage(tabId, { action: 'toggle' }, () => {
+          if (chrome.runtime.lastError) {
+            showConnectError();
+          } else {
+            window.close();
+          }
+        });
+      })
+      .catch(() => showConnectError());
+  });
+}
+
+function injectContentScripts(tabId) {
+  return Promise.all([
+    chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      files: MAIN_SCRIPTS,
+    }),
+    chrome.scripting.executeScript({
+      target: { tabId },
+      files: ISOLATED_SCRIPTS,
+    }),
+    chrome.scripting.insertCSS({
+      target: { tabId },
+      files: STYLES,
+    }),
+  ]);
+}
+
+function showConnectError() {
+  content.innerHTML = `
+    <div class="not-youtube">
+      Could not connect. Try refreshing the YouTube page.
+    </div>
+  `;
+}

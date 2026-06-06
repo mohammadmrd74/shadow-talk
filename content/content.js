@@ -9,6 +9,9 @@
   let currentIndex = 0;
   let isActive = false;
   let scores = [];
+  // Auto-advance to the next sentence after showing the score. Session-only
+  // (resets to true each session); toggled from the score screen.
+  let autoAdvance = true;
 
   /**
    * Initialize: create UI overlay, show start screen.
@@ -116,7 +119,8 @@
       onReplay: () => replaySentence(index),
       onRetry: () => retrySentence(index),
       onContinue: () => nextSentence(index),
-    });
+      onToggleAuto: (enabled) => { autoAdvance = enabled; },
+    }, autoAdvance);
   }
 
   /**

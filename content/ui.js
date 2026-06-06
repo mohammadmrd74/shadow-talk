@@ -4,6 +4,10 @@
 
 const ShadowUI = (() => {
   let overlay = null;
+  // Dragged position, kept for the session so it survives re-renders and
+  // SPA re-inits. Null until the user first drags the panel.
+  let savedPos = null;
+  let dragState = null;
 
   /**
    * Create the overlay element and inject it into the page.
@@ -15,7 +19,59 @@ const ShadowUI = (() => {
     overlay.id = 'shadow-talk-overlay';
     overlay.classList.add('st-hidden');
     document.body.appendChild(overlay);
+    _initDrag();
+    _applySavedPos();
     return overlay;
+  }
+
+  /**
+   * Make the panel draggable by its header. Uses event delegation on the
+   * overlay so it keeps working after each innerHTML re-render.
+   */
+  function _initDrag() {
+    overlay.addEventListener('mousedown', (e) => {
+      const header = e.target.closest('.st-header');
+      if (!header || !overlay.contains(header)) return;
+      if (e.target.closest('button')) return; // let close/stop buttons work
+
+      e.preventDefault();
+      const rect = overlay.getBoundingClientRect();
+      dragState = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+
+      // Switch from bottom/right anchoring to left/top so we can move freely.
+      overlay.style.left = rect.left + 'px';
+      overlay.style.top = rect.top + 'px';
+      overlay.style.right = 'auto';
+      overlay.style.bottom = 'auto';
+
+      document.addEventListener('mousemove', _onDragMove);
+      document.addEventListener('mouseup', _onDragEnd);
+    });
+  }
+
+  function _onDragMove(e) {
+    if (!dragState) return;
+    const w = overlay.offsetWidth;
+    const h = overlay.offsetHeight;
+    let left = Math.max(0, Math.min(e.clientX - dragState.dx, window.innerWidth - w));
+    let top = Math.max(0, Math.min(e.clientY - dragState.dy, window.innerHeight - h));
+    overlay.style.left = left + 'px';
+    overlay.style.top = top + 'px';
+    savedPos = { left, top };
+  }
+
+  function _onDragEnd() {
+    dragState = null;
+    document.removeEventListener('mousemove', _onDragMove);
+    document.removeEventListener('mouseup', _onDragEnd);
+  }
+
+  function _applySavedPos() {
+    if (!savedPos || !overlay) return;
+    overlay.style.left = savedPos.left + 'px';
+    overlay.style.top = savedPos.top + 'px';
+    overlay.style.right = 'auto';
+    overlay.style.bottom = 'auto';
   }
 
   /**
@@ -210,9 +266,24 @@ const ShadowUI = (() => {
   }
 
   /**
-   * Render the score result after user speaks.
+   * Auto-advance delay (ms), scaled to the score: a good rep moves on quickly,
+   * a poor rep gives the learner time to read the word-diff.
    */
-  function renderScore(result, sentence, sentenceIndex, totalSentences, callbacks) {
+  function _autoAdvanceDelay(score) {
+    if (score >= 80) return 2000;
+    if (score >= 50) return 3000;
+    return 4500;
+  }
+
+  /**
+   * Render the score result after user speaks.
+   *
+   * When `autoAdvance` is enabled, a visible countdown bar drains over a
+   * score-scaled delay and then fires `onContinue`. Replay/Retry, toggling
+   * auto-advance off, or hovering the panel cancels the countdown so the
+   * learner can study at their own pace. `Continue` always advances now.
+   */
+  function renderScore(result, sentence, sentenceIndex, totalSentences, callbacks, autoAdvance) {
     const scoreClass =
       result.score >= 80 ? 'st-score-great' :
       result.score >= 50 ? 'st-score-good' : 'st-score-poor';
@@ -242,18 +313,95 @@ const ShadowUI = (() => {
           <div class="st-sentence-label">You said</div>
           <div class="st-sentence-text">${_renderUserWords(result.userWords)}</div>
         </div>
+        <div class="st-countdown ${autoAdvance ? '' : 'st-hidden'}">
+          <div class="st-countdown-fill"></div>
+        </div>
         <div class="st-buttons">
           <button class="st-btn st-btn-secondary" data-action="replay">Replay</button>
           <button class="st-btn st-btn-secondary" data-action="retry">Retry</button>
           <button class="st-btn st-btn-primary" data-action="continue">Continue</button>
         </div>
+        <label class="st-auto-toggle">
+          <input type="checkbox" data-action="toggle-auto" ${autoAdvance ? 'checked' : ''}>
+          <span>Auto-continue</span>
+        </label>
       </div>
     `;
 
-    overlay.querySelector('[data-action="stop"]').onclick = callbacks.onStop;
-    overlay.querySelector('[data-action="replay"]').onclick = callbacks.onReplay;
-    overlay.querySelector('[data-action="retry"]').onclick = callbacks.onRetry;
-    overlay.querySelector('[data-action="continue"]').onclick = callbacks.onContinue;
+    // --- Countdown / auto-advance wiring ---
+    let timerId = null;
+    let cancelled = false;
+
+    const cancelAuto = () => {
+      if (timerId) {
+        clearTimeout(timerId);
+        timerId = null;
+      }
+      cancelled = true;
+      const fill = overlay.querySelector('.st-countdown-fill');
+      if (fill) {
+        // Freeze the bar where it is.
+        const w = getComputedStyle(fill).width;
+        fill.style.transition = 'none';
+        fill.style.width = w;
+      }
+      const bar = overlay.querySelector('.st-countdown');
+      if (bar) bar.classList.add('st-hidden');
+    };
+
+    const startAuto = () => {
+      cancelled = false;
+      const delay = _autoAdvanceDelay(result.score);
+      const bar = overlay.querySelector('.st-countdown');
+      const fill = overlay.querySelector('.st-countdown-fill');
+      if (bar) bar.classList.remove('st-hidden');
+      if (fill) {
+        fill.style.transition = 'none';
+        fill.style.width = '100%';
+        // Next frame: animate to 0 over the delay.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            fill.style.transition = `width ${delay}ms linear`;
+            fill.style.width = '0%';
+          });
+        });
+      }
+      timerId = setTimeout(() => {
+        if (!cancelled) callbacks.onContinue();
+      }, delay);
+    };
+
+    overlay.querySelector('[data-action="stop"]').onclick = () => {
+      cancelAuto();
+      callbacks.onStop();
+    };
+    overlay.querySelector('[data-action="replay"]').onclick = () => {
+      cancelAuto();
+      callbacks.onReplay();
+    };
+    overlay.querySelector('[data-action="retry"]').onclick = () => {
+      cancelAuto();
+      callbacks.onRetry();
+    };
+    overlay.querySelector('[data-action="continue"]').onclick = () => {
+      cancelAuto();
+      callbacks.onContinue();
+    };
+
+    const toggle = overlay.querySelector('[data-action="toggle-auto"]');
+    toggle.onchange = () => {
+      if (callbacks.onToggleAuto) callbacks.onToggleAuto(toggle.checked);
+      if (toggle.checked) {
+        startAuto();
+      } else {
+        cancelAuto();
+      }
+    };
+
+    // Hovering the panel means the learner wants to study — pause the countdown.
+    overlay.addEventListener('mouseenter', cancelAuto, { once: true });
+
+    if (autoAdvance) startAuto();
   }
 
   /**

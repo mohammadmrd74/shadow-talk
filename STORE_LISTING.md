@@ -17,7 +17,7 @@ HOW IT WORKS
 4. The video pauses — now it's your turn to repeat the sentence
 5. Shadow Talk listens to your speech and scores your accuracy
 6. See a word-by-word comparison: green for correct, red for missed
-7. Click Continue to move to the next sentence, or Replay to try again
+7. It automatically advances to the next sentence (a quick countdown you can cancel), or use Replay to try again
 
 WHY SHADOWING WORKS
 Shadowing is a language learning method used by interpreters and polyglots worldwide. By mimicking native speakers sentence-by-sentence, you train:
@@ -32,6 +32,8 @@ FEATURES
 - Word-level scoring with visual diff (correct / close match / missed)
 - Live preview of what you're saying as you speak
 - Replay, retry, and skip controls
+- Auto-advance with a cancellable countdown so you keep your speaking rhythm
+- Draggable panel — move it anywhere over the video
 - 20 languages supported including English, Spanish, French, German, Japanese, Korean, Chinese, Arabic, Hindi, Persian, and more
 - Dark-themed overlay that doesn't block the video
 - Progress bar tracking your session

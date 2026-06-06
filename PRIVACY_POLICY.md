@@ -1,6 +1,6 @@
 # Privacy Policy — Shadow Talk
 
-**Last updated:** February 27, 2026
+**Last updated:** June 6, 2026
 
 ## Overview
 
@@ -24,16 +24,16 @@ The extension accesses the following data, all of which stays entirely on your d
 - The extension itself does not record, store, or transmit any audio.
 - Note: Chrome's Web Speech API may send audio to Google's servers for processing. This is a browser-level behavior controlled by Google, not by this extension. See [Google's Privacy Policy](https://policies.google.com/privacy) for details.
 
-### Local Storage
-- The extension uses Chrome's local storage (`chrome.storage.local`) to save user preferences such as selected language.
-- This data never leaves your device.
+### Preferences
+- Preferences such as your selected language are kept in memory for the current session only.
+- Nothing is persisted to disk or sent anywhere.
 
 ## Permissions Explained
 
 | Permission | Why It's Needed |
 |-----------|----------------|
 | `activeTab` | To interact with the YouTube page when you click the extension icon |
-| `storage` | To save your language preference locally |
+| `scripting` | To load the practice panel into the active YouTube tab when you activate the extension (e.g. after navigating between videos within YouTube). Runs only on youtube.com and only in response to your action. |
 | `host_permissions: youtube.com` | To inject the shadowing interface on YouTube video pages |
 
 ## Third-Party Services

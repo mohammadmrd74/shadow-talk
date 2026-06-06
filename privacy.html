@@ -16,7 +16,7 @@
 </head>
 <body>
   <h1>Privacy Policy — Shadow Talk</h1>
-  <p><strong>Last updated:</strong> February 27, 2026</p>
+  <p><strong>Last updated:</strong> June 6, 2026</p>
 
   <h2>Overview</h2>
   <p>Shadow Talk is a browser extension that helps users practice speaking by shadowing YouTube videos. This privacy policy explains what data the extension accesses and how it is handled.</p>
@@ -34,14 +34,14 @@
   <p>The extension uses the Web Speech API built into your browser (Chrome) to recognize your speech during practice sessions. Speech audio is processed by your browser's built-in speech recognition engine. The extension itself does not record, store, or transmit any audio.</p>
   <p><em>Note: Chrome's Web Speech API may send audio to Google's servers for processing. This is a browser-level behavior controlled by Google, not by this extension. See <a href="https://policies.google.com/privacy">Google's Privacy Policy</a> for details.</em></p>
 
-  <h3>Local Storage</h3>
-  <p>The extension uses Chrome's local storage to save user preferences such as selected language. This data never leaves your device.</p>
+  <h3>Preferences</h3>
+  <p>Preferences such as your selected language are kept in memory for the current session only. Nothing is persisted to disk or sent anywhere.</p>
 
   <h2>Permissions Explained</h2>
   <table>
     <tr><th>Permission</th><th>Why It's Needed</th></tr>
     <tr><td>activeTab</td><td>To interact with the YouTube page when you click the extension icon</td></tr>
-    <tr><td>storage</td><td>To save your language preference locally</td></tr>
+    <tr><td>scripting</td><td>To load the practice panel into the active YouTube tab when you activate the extension (e.g. after navigating between videos within YouTube). Runs only on youtube.com and only in response to your action.</td></tr>
     <tr><td>host_permissions: youtube.com</td><td>To inject the shadowing interface on YouTube video pages</td></tr>
   </table>
 
